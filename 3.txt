@@ -1,0 +1,260 @@
+#Region Module Attributes
+	#FullScreen: False
+	#IncludeTitle: True
+#End Region
+
+'Activity module
+Sub Process_Globals
+	Dim AStream As AsyncStreams
+	
+End Sub
+
+Sub Globals
+	Dim txtInput As EditText
+	Dim txtLog As EditText
+	Dim btnSend As Button
+	
+	Dim Vrx(10000) As Short
+	Dim cntrx As Int=0
+	Private ChecEnter As CheckBox
+	Private ToggleButton1 As ToggleButton
+	Private Button2 As Button
+	Private Button1 As Button
+	Private Spinner1 As Spinner
+End Sub
+
+Sub Activity_Create(FirstTime As Boolean)
+	Activity.LoadLayout("2")
+	txtLog.Color=Colors.White
+	txtInput.Color=Colors.White
+	
+	If AStream.IsInitialized = False Then
+		AStream.Initialize(   Pantalla2.serial1.InputStream,  Pantalla2.serial1.OutputStream,  "AStream")
+		
+	End If
+	txtLog.Width = 100%x
+End Sub
+
+Sub AStream_NewData (Buffer() As Byte)
+	'Dim newDataStart As Int = sb.Length
+'	Byte : 1byte signed: -128 To 127
+'	Char : 2bytes unsigned: 0 To 65535 : Not all values are valid Unicode code points
+'	Short : 2bytes signed: -32768 To 32767
+'	Int : 4bytes signed: -2147483648 To 2147483647
+'	Long : 8bytes signed: -9,223,372,036,854,775,808 To 9,223,372,036,854,775,807 (9.2...E+18)
+'	Float : 4bytes +/- 3.4e +/- 38 (~7 digits)
+'	Double : 8bytes +/- 1.7e +/- 308 (~15 digits)
+
+	Try
+	
+		If  Buffer.Length=0 Then Return
+	
+		Dim DATOS As String
+		DATOS= DATOS & BytesToString( Buffer , 0, Buffer.Length,"UTF8" )
+		
+		'LogMessage("rx",  DATOS)
+		'Return
+		
+		
+		Dim Lsb,MSB,Datodc As Short
+		Dim b1,aux2 As Short
+		Dim V1,V2 As Float
+		Dim Flag_Correr As Boolean = False
+		Dim aux,pos As Int
+		Dim s As Char
+		
+		'--------------------------------
+		For i = 0 To Buffer.Length - 1
+			b1 = Buffer(i)
+			'------------------- ajuste byte negativos
+			'-------- ya que byte va de -128 hast 128 en B4A
+			If b1 < 0 Then
+				b1=b1+256
+			End If
+			'---------- agrego a buffer de recepcion  de 0 a 255
+			Vrx(cntrx)=b1
+			cntrx=cntrx +1
+		Next
+		
+		'----------------
+		For i=0 To cntrx-1
+			
+			If Vrx(i) = 13 Then
+				'13' 12
+				'1   13
+				'2   14
+				' cntrx = 15
+				aux2 = i+2
+				
+				If aux2 < cntrx Then
+					MSB = Vrx(i+1)
+					Lsb = Vrx(i+2)
+					Datodc = (MSB*256) + Lsb ' convierto de 0 a 1023
+					V1 = Datodc*0.004887  ' multiplico por la resolucion del adc
+					s=V1
+					Spinner1.AddAll(Array As String("POTENCIA",V1))
+					cntrx = 0
+				End If
+				Return
+			End If
+			
+			If Vrx(i) = 10 Then
+				
+				aux2 = i+4
+				
+				If aux2 < cntrx Then
+					MSB = Vrx(i+1)
+					Lsb = Vrx(i+2)
+					Datodc = (MSB*256) + Lsb ' convierto de 0 a 1023
+					V1 = Datodc*0.004887  ' multiplico por la resolucion del adc
+					LogMessage("Rx", NumberFormat( V1,1,2))
+					'---------------
+					MSB = Vrx(i+3)
+					Lsb = Vrx(i+4)
+					Datodc = (MSB*256) + Lsb ' convierto de 0 a 1023
+					V1 = Datodc*0.004887  ' multiplico por la resolucion del adc
+					LogMessage("Rx", NumberFormat( V1,1,2))
+					cntrx = 0
+				End If
+				
+				Return
+			End If
+			
+		Next
+		
+		
+		'-----------------------------------
+		
+		
+		
+		Return
+		
+		'-----------------
+		
+		For i = 0 To Buffer.Length - 1
+			b1 = Buffer(i)
+			'------------------- ajuste byte negativos
+			'-------- ya que byte va de -128 hast 128 en B4A
+			If b1 < 0 Then
+				b1=b1+256
+			End If
+			'---------- agrego a buffer de recepcion  de 0 a 255
+			Vrx(cntrx)=b1
+			cntrx=cntrx +1
+			
+		Next
+		
+		'--------- busco Byte de inicio
+		For j=0 To cntrx -1
+			If Vrx(j)=13 Then
+				If  (cntrx-j)>3 Then
+					MSB= Vrx(j+1)
+					Lsb= Vrx(j+2)
+					Datodc = (MSB*256) + Lsb ' convierto de 0 a 1023
+					V1 = Datodc*0.004887  ' multiplico por la resolucion del adc
+					LogMessage("Adc", Datodc & " V = " & V1)
+					Flag_Correr = True
+					aux= j+3
+				End If
+			End If
+		Next
+		'---------------------si capture dato corro trama para nuevos datos
+		If Flag_Correr Then
+			If aux < cntrx Then
+				pos = 0
+				For j=aux To cntrx -1
+					Vrx(pos)=Vrx(j)
+					pos=pos+1
+				Next
+				cntrx = pos
+			Else
+				cntrx=0
+			End If
+		End If
+
+	Catch
+		Msgbox( LastException,"Error")
+	End Try
+	
+End Sub
+
+Sub AStream_Error
+	ToastMessageShow("Connection is broken.", True)
+	btnSend.Enabled = False
+	txtInput.Enabled = False
+	
+End Sub
+
+Sub AStream_Terminated
+	AStream_Error
+End Sub
+
+Sub Activity_Resume
+	
+End Sub
+
+Sub Activity_Pause (UserClosed As Boolean)
+	If UserClosed Then
+		AStream.Close
+	End If
+End Sub
+
+Sub txtInput_EnterPressed
+	If btnSend.Enabled = True Then btnSend_Click
+End Sub
+
+
+
+Private Sub Button2_Click
+	
+	Dim datostx As String = Button2.Text
+	If ToggleButton1.Checked = True Then
+		datostx = datostx & Chr(49)
+		AStream.Write(  datostx.GetBytes("UTF8"))
+	Else
+		AStream.Write(datostx.GetBytes("UTF8"))
+	End If
+'	LogMessage("Variable", Button2.Text) 
+	
+	
+End Sub
+
+Private Sub Button1_Click
+	Dim datostx As String = Button1.Text
+	If ToggleButton1.Checked = True Then
+		datostx = datostx & Chr(51)
+		AStream.Write(  datostx.GetBytes("UTF8"))
+	Else
+		AStream.Write(datostx.GetBytes("UTF8"))
+	End If
+	'LogMessage("Variable", Button3.Text)
+	
+	
+	
+End Sub
+
+Sub btnSend_Click
+	Dim Datostx As String = txtInput.Text
+	
+	If ToggleButton1.Checked = True Then
+		Datostx = Datostx & Chr(13)
+		AStream.Write(  Datostx.GetBytes("UTF8"))
+	Else
+		AStream.Write(Datostx.GetBytes("UTF8"))
+	End If
+
+	txtInput.SelectAll
+	txtInput.RequestFocus
+	LogMessage("Me", txtInput.Text)
+End Sub
+
+Sub LogMessage(From As String, Msg As String)
+	txtLog.Text = txtLog.Text & From & ": " & Msg & CRLF
+	txtLog.SelectionStart = txtLog.Text.Length
+	
+	If txtLog.Text.Length > 100 Then
+		txtLog.Text = ""
+		txtLog.SelectionStart = txtLog.Text.Length
+	End If
+End Sub
+

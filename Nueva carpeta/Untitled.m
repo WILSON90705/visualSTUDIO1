@@ -1,0 +1,11 @@
+s=tf('s');
+PQ=4/(s*(s+0.5));
+sig=2;
+wd=3;
+sx=-sig+wd*i;
+z=sig;
+p=z+5;
+Gx=4/(sx*(sx+0.5));
+Cx=(sx+z)/(sx+p);
+Kc=1/abs(Gx*Cx)
+C=zpk(-z,-p,Kc)

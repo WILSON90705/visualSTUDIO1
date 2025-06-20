@@ -1,0 +1,20 @@
+syms s
+s=tf('s');
+A1=(6/3);
+A2=5*A1;
+R1=0.1;
+R2=0.01;
+G=(1/((R1*R2*A1*A2*s^2)+(A1*R1*A2*R2+A2*R2+A1*R2)*s+1));
+t=0:1e-3:15;
+[y]=step(G,t);
+plot(t',y)
+QAS=iddata(y,ones(length(t),1));
+XV=procest(QAS,'P1D')
+compare(QAS,G);
+Td=G.Td;
+Kp=G.Kp;
+tao=G.Tp1;
+Gc1=tao/(Kp*Td)
+tk=feedback(G,1)
+Tc1=feedback(G*Gc1,1)
+step(tk,Tc1)
